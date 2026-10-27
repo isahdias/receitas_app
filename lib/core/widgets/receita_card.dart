@@ -1,20 +1,28 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/receita.dart';
+import 'receita_imagem.dart';
 
 class ReceitaCard extends StatelessWidget {
   final Receita receita;
   final VoidCallback? onTap;
 
-  const ReceitaCard({super.key, required this.receita, this.onTap});
+  const ReceitaCard({
+    super.key,
+    required this.receita,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      clipBehavior: Clip.antiAlias,
       child: ListTile(
-        leading: CircleAvatar(
-          child: Icon(_iconePorCategoria(receita.categoria)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        leading: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: ReceitaImagem(receita: receita, largura: 56, altura: 56),
         ),
         title: Text(
           receita.titulo,
@@ -27,16 +35,5 @@ class ReceitaCard extends StatelessWidget {
         onTap: onTap,
       ),
     );
-  }
-
-  IconData _iconePorCategoria(String categoria) {
-    switch (categoria) {
-      case 'Doce':
-        return Icons.cake;
-      case 'Bebida':
-        return Icons.local_drink;
-      default:
-        return Icons.restaurant;
-    }
   }
 }

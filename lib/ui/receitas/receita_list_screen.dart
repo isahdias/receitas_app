@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../core/widgets/receita_card.dart';
 import '../../data/receita_repository.dart';
 
+import 'package:go_router/go_router.dart';
+
 class ReceitaListScreen extends StatelessWidget {
   const ReceitaListScreen({super.key});
 
@@ -25,7 +27,11 @@ class ReceitaListScreen extends StatelessWidget {
             padding: const EdgeInsets.symmetric(vertical: 8),
             itemCount: receitas.length,
             itemBuilder: (context, index) {
-              return ReceitaCard(receita: receitas[index]);
+              final receita = receitas[index];
+              return ReceitaCard(
+                receita: receita,
+                onTap: () => context.push('/receita/${receita.id}'),
+              );
             },
           );
         },
