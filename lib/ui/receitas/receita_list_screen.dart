@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/widgets/receita_card.dart';
+import '../../data/auth_service.dart';
 import '../../data/receita_repository.dart';
 
 import 'package:go_router/go_router.dart';
@@ -11,20 +12,56 @@ class ReceitaListScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Minhas Receitas')),
+      appBar: AppBar(
+        title: const Text('Minhas Receitas'),
+        actions: [
+          IconButton(
+            tooltip: 'Sair',
+            icon: const Icon(Icons.logout),
+            onPressed: authService.sair,
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => context.push('/receita/nova'),
+        icon: const Icon(Icons.add),
+        label: const Text('Nova receita'),
+      ),
       body: ListenableBuilder(
         listenable: receitaRepository,
         builder: (context, _) {
-          final receitas = receitaRepository.receitas;
+          // LOADING: esperando a primeira resposta do Firestore
+          if (receitaRepository.carregando) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
-          if (receitas.isEmpty) {
-            return const Center(
-              child: Text('Nenhuma receita cadastrada ainda.'),
+          // ERRO: permissão, conexão etc.
+          final erro = receitaRepository.erro;
+          if (erro != null) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.error_outline, size: 48),
+                    const SizedBox(height: 12),
+                    Text(erro, textAlign: TextAlign.center),
+                  ],
+                ),
+              ),
             );
           }
 
+          final receitas = receitaRepository.receitas;
+
+          // ESTADO VAZIO
+          if (receitas.isEmpty) {
+            return const _EstadoVazio();
+          }
+
           return ListView.builder(
-            padding: const EdgeInsets.symmetric(vertical: 8),
+            padding: const EdgeInsets.only(top: 8, bottom: 88),
             itemCount: receitas.length,
             itemBuilder: (context, index) {
               final receita = receitas[index];
@@ -35,6 +72,78 @@ class ReceitaListScreen extends StatelessWidget {
             },
           );
         },
+      ),
+    );
+  }
+}
+
+/// Mensagem amigável quando o usuário ainda não tem receitas, com ação
+/// para cadastrar a primeira (ou importar as receitas de exemplo).
+class _EstadoVazio extends StatefulWidget {
+  const _EstadoVazio();
+
+  @override
+  State<_EstadoVazio> createState() => _EstadoVazioState();
+}
+
+class _EstadoVazioState extends State<_EstadoVazio> {
+  bool _importando = false;
+
+  Future<void> _importar() async {
+    if (_importando) return;
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _importando = true);
+    try {
+      await receitaRepository.importarExemplos();
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Receitas de exemplo importadas.')),
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(ReceitaRepository.mensagemDeErro(e))),
+      );
+    } finally {
+      if (mounted) setState(() => _importando = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.menu_book_outlined, size: 64),
+            const SizedBox(height: 12),
+            Text(
+              'Nenhuma receita cadastrada ainda.',
+              style: Theme.of(context).textTheme.titleMedium,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 4),
+            const Text('Que tal cadastrar a primeira?'),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: () => context.push('/receita/nova'),
+              icon: const Icon(Icons.add),
+              label: const Text('Cadastrar primeira receita'),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: _importando ? null : _importar,
+              icon: _importando
+                  ? const SizedBox(
+                      height: 16,
+                      width: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.download_outlined),
+              label: const Text('Importar receitas de exemplo'),
+            ),
+          ],
+        ),
       ),
     );
   }

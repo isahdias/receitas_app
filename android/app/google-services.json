@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "946292380077",
+    "project_id": "tempero-do-tempo",
+    "storage_bucket": "tempero-do-tempo.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:946292380077:android:53afaf2c14f6a1a1f65124",
+        "android_client_info": {
+          "package_name": "com.example.receitas_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyClwLzkrHYOy6n24qq0hONmXcgZxDE9xpw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
