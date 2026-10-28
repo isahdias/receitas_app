@@ -7,6 +7,9 @@ import 'package:flutter/foundation.dart';
 import '../domain/receita.dart';
 import 'receita_mapper.dart';
 import 'receitas_exemplo.dart';
+import 'receitas_themealdb.dart';
+import 'receitas_themealdb2.dart';
+import 'receitas_themealdb3.dart';
 
 /// Único lugar do app que fala com o Firestore.
 ///
@@ -138,6 +141,35 @@ class ReceitaRepository extends ChangeNotifier {
       }
       return lote.commit();
     });
+  }
+
+  /// Importa as receitas da TheMealDB (já traduzidas) para a conta logada.
+  /// Cada receita usa um id fixo (ex.: mealdb-53120), então importar de novo
+  /// NÃO cria duplicadas: as que já existem são puladas.
+  /// Devolve quantas receitas novas foram gravadas.
+  Future<int> importarReceitasProntas() async {
+    final jaExistem = _receitas.map((r) => r.id).toSet();
+    final novas = [
+      ...receitasTheMealDB,
+      ...receitasTheMealDB2,
+      ...receitasTheMealDB3,
+    ].where((r) => !jaExistem.contains(r.id)).toList();
+
+    if (novas.isEmpty) return 0;
+
+    await _executar(() {
+      final colecao = _colecao(_uid);
+      final lote = FirebaseFirestore.instance.batch();
+      for (final r in novas) {
+        lote.set(colecao.doc(r.id), {
+          ...receitaParaMap(r),
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
+      return lote.commit();
+    });
+    return novas.length;
   }
 
   /// Sem internet o Firestore guarda a escrita e só confirma quando a conexão

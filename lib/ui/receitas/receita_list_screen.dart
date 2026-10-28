@@ -6,6 +6,34 @@ import '../../data/receita_repository.dart';
 
 import 'package:go_router/go_router.dart';
 
+import 'clima_sugestao_card.dart';
+
+/// Importa as receitas prontas (TheMealDB) sem duplicar as que já existem.
+Future<void> _importarMais(BuildContext context) async {
+  final messenger = ScaffoldMessenger.of(context);
+  messenger.showSnackBar(
+    const SnackBar(content: Text('Importando receitas...')),
+  );
+  try {
+    final qtd = await receitaRepository.importarReceitasProntas();
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          qtd == 0
+              ? 'Você já tem todas as receitas importadas.'
+              : '$qtd receitas importadas!',
+        ),
+      ),
+    );
+  } catch (e) {
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(content: Text(ReceitaRepository.mensagemDeErro(e))),
+    );
+  }
+}
+
 class ReceitaListScreen extends StatelessWidget {
   const ReceitaListScreen({super.key});
 
@@ -15,6 +43,11 @@ class ReceitaListScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Minhas Receitas'),
         actions: [
+          IconButton(
+            tooltip: 'Importar mais receitas',
+            icon: const Icon(Icons.download_outlined),
+            onPressed: () => _importarMais(context),
+          ),
           IconButton(
             tooltip: 'Sair',
             icon: const Icon(Icons.logout),
@@ -60,16 +93,27 @@ class ReceitaListScreen extends StatelessWidget {
             return const _EstadoVazio();
           }
 
-          return ListView.builder(
-            padding: const EdgeInsets.only(top: 8, bottom: 88),
-            itemCount: receitas.length,
-            itemBuilder: (context, index) {
-              final receita = receitas[index];
-              return ReceitaCard(
-                receita: receita,
-                onTap: () => context.push('/receita/${receita.id}'),
-              );
-            },
+          return Column(
+            children: [
+              // Card do clima: mostra o tempo de agora e sugere uma receita.
+              ClimaSugestaoCard(
+                receitas: receitas,
+                aoAbrir: (receita) => context.push('/receita/${receita.id}'),
+              ),
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.only(top: 8, bottom: 88),
+                  itemCount: receitas.length,
+                  itemBuilder: (context, index) {
+                    final receita = receitas[index];
+                    return ReceitaCard(
+                      receita: receita,
+                      onTap: () => context.push('/receita/${receita.id}'),
+                    );
+                  },
+                ),
+              ),
+            ],
           );
         },
       ),

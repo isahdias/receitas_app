@@ -1,4 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Internet: receitas/fotos e previsão do tempo -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Localização aproximada: clima de onde a pessoa está -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <application
         android:label="receitas_app"
         android:name="${applicationName}"
