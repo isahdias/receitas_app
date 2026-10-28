@@ -8,6 +8,7 @@ class Receita {
   final List<String> ingredientes;
   final String modoPreparo;
   final String dificuldade;
+  final String? imagemUrl;
 
   const Receita({
     required this.id,
@@ -19,5 +20,6 @@ class Receita {
     required this.ingredientes,
     required this.modoPreparo,
     required this.dificuldade,
+    this.imagemUrl,
   });
 }

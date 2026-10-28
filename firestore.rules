@@ -1,0 +1,42 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Cada usuário só acessa as receitas dentro do próprio caminho users/{uid}.
+    match /users/{userId}/receitas/{receitaId} {
+
+      function logado() {
+        return request.auth != null;
+      }
+
+      function dono() {
+        return logado() && request.auth.uid == userId;
+      }
+
+      // Validação dos dados gravados (criação e edição).
+      function dadosValidos() {
+        let d = request.resource.data;
+        return d.keys().hasAll([
+              'titulo', 'descricao', 'categoria', 'tempoPreparo',
+              'porcoes', 'ingredientes', 'modoPreparo', 'dificuldade'
+            ])
+          && d.titulo is string && d.titulo.size() > 0 && d.titulo.size() <= 120
+          && d.descricao is string
+          && d.categoria is string
+          && d.tempoPreparo is int && d.tempoPreparo > 0
+          && d.porcoes is int && d.porcoes > 0
+          && d.ingredientes is list && d.ingredientes.size() > 0
+          && d.modoPreparo is string && d.modoPreparo.size() > 0
+          && d.dificuldade is string;
+      }
+
+      allow read, delete: if dono();
+      allow create, update: if dono() && dadosValidos();
+    }
+
+    // Todo o resto do banco fica bloqueado.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

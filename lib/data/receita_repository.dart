@@ -1,97 +1,100 @@
+import 'dart:async';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
 import '../domain/receita.dart';
+import 'receita_mapper.dart';
+import 'receitas_exemplo.dart';
+import 'receitas_themealdb.dart';
+import 'receitas_themealdb2.dart';
+import 'receitas_themealdb3.dart';
 
+/// Único lugar do app que fala com o Firestore.
+///
+/// Os dados ficam em users/{uid}/receitas/{receitaId}. O uid vem SEMPRE da
+/// sessão autenticada (FirebaseAuth), nunca de um campo da tela, e as
+/// Security Rules reforçam isso no servidor.
+///
+/// Mantém a mesma "cara" de antes (receitas, buscarPorId, adicionar, remover)
+/// para as telas continuarem funcionando com ListenableBuilder.
 class ReceitaRepository extends ChangeNotifier {
-  final List<Receita> _receitas = [
-    const Receita(
-      id: '1',
-      titulo: 'Bolo de Cenoura',
-      descricao: 'Bolo fofinho com cobertura de chocolate.',
-      categoria: 'Doce',
-      tempoPreparo: 50,
-      porcoes: 10,
-      ingredientes: [
-        '3 cenouras médias',
-        '4 ovos',
-        '1 xícara de óleo',
-        '2 xícaras de açúcar',
-        '2 xícaras de farinha de trigo',
-        '1 colher de sopa de fermento',
-      ],
-      modoPreparo:
-          'Bata no liquidificador as cenouras, os ovos e o óleo. '
-          'Misture com o açúcar e a farinha, acrescente o fermento '
-          'e asse em forno médio por 40 minutos.',
-      dificuldade: 'Fácil',
-    ),
-    const Receita(
-      id: '2',
-      titulo: 'Pão de Queijo',
-      descricao: 'Clássico mineiro, crocante por fora e macio por dentro.',
-      categoria: 'Salgado',
-      tempoPreparo: 40,
-      porcoes: 20,
-      ingredientes: [
-        '500 g de polvilho azedo',
-        '1 xícara de leite',
-        '1/2 xícara de óleo',
-        '2 ovos',
-        '200 g de queijo meia cura ralado',
-        'Sal a gosto',
-      ],
-      modoPreparo:
-          'Ferva o leite com o óleo e o sal e escalde o polvilho. '
-          'Deixe amornar, junte os ovos e o queijo e sove bem. '
-          'Faça bolinhas e asse em forno a 180 °C por 25 minutos.',
-      dificuldade: 'Média',
-    ),
-    const Receita(
-      id: '3',
-      titulo: 'Suco Verde',
-      descricao: 'Refrescante e nutritivo, ótimo para o café da manhã.',
-      categoria: 'Bebida',
-      tempoPreparo: 10,
-      porcoes: 2,
-      ingredientes: [
-        '1 folha de couve',
-        '1 maçã',
-        'Suco de 1 limão',
-        '1 pedaço de gengibre',
-        '400 ml de água gelada',
-      ],
-      modoPreparo:
-          'Bata todos os ingredientes no liquidificador, coe se preferir '
-          'e sirva gelado.',
-      dificuldade: 'Fácil',
-    ),
-    const Receita(
-      id: '4',
-      titulo: 'Lasanha à Bolonhesa',
-      descricao: 'Camadas de massa, molho de carne e queijo gratinado.',
-      categoria: 'Salgado',
-      tempoPreparo: 90,
-      porcoes: 8,
-      ingredientes: [
-        '500 g de massa para lasanha',
-        '500 g de carne moída',
-        '1 lata de molho de tomate',
-        '400 g de muçarela',
-        '200 g de presunto',
-        '1 cebola picada',
-      ],
-      modoPreparo:
-          'Refogue a cebola com a carne e junte o molho de tomate. '
-          'Monte camadas de massa, molho, presunto e muçarela. '
-          'Cubra com queijo e asse a 200 °C por 40 minutos.',
-      dificuldade: 'Difícil',
-    ),
-  ];
+  List<Receita> _receitas = [];
+  bool _carregando = false;
+  String? _erro;
+
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _assinatura;
+  StreamSubscription<User?>? _assinaturaAuth;
 
   List<Receita> get receitas => List.unmodifiable(_receitas);
 
-  void adicionar(Receita receita) {
-    _receitas.add(receita);
+  /// true enquanto espera a primeira resposta do Firestore.
+  bool get carregando => _carregando;
+
+  /// Mensagem de erro da leitura (permissão, conexão...), ou null.
+  String? get erro => _erro;
+
+  /// Chamar uma vez no main(), depois do Firebase.initializeApp.
+  /// Quando o usuário entra, começa a escutar as receitas dele;
+  /// quando sai, para de escutar e limpa a lista.
+  void ouvirUsuario() {
+    _assinaturaAuth?.cancel();
+    _assinaturaAuth =
+        FirebaseAuth.instance.authStateChanges().listen((user) {
+      if (user == null) {
+        _parar();
+      } else {
+        _iniciar(user.uid);
+      }
+    });
+  }
+
+  CollectionReference<Map<String, dynamic>> _colecao(String uid) =>
+      FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .collection('receitas');
+
+  String get _uid {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) throw StateError('Usuário não autenticado.');
+    return user.uid;
+  }
+
+  /// READ em tempo real: a lista se atualiza sozinha depois de criar,
+  /// editar ou excluir (snapshots).
+  void _iniciar(String uid) {
+    _assinatura?.cancel();
+    _receitas = [];
+    _carregando = true;
+    _erro = null;
+    notifyListeners();
+
+    _assinatura = _colecao(uid)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .listen(
+      (snap) {
+        _receitas = snap.docs.map(receitaDeDoc).toList();
+        _carregando = false;
+        _erro = null;
+        notifyListeners();
+      },
+      onError: (Object e) {
+        _carregando = false;
+        _erro = mensagemDeErro(e);
+        notifyListeners();
+      },
+    );
+  }
+
+  void _parar() {
+    _assinatura?.cancel();
+    _assinatura = null;
+    _receitas = [];
+    _carregando = false;
+    _erro = null;
     notifyListeners();
   }
 
@@ -100,6 +103,102 @@ class ReceitaRepository extends ChangeNotifier {
       if (receita.id == id) return receita;
     }
     return null;
+  }
+
+  /// CREATE
+  Future<void> adicionar(Receita receita) {
+    return _executar(() => _colecao(_uid).add({
+          ...receitaParaMap(receita),
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        }));
+  }
+
+  /// UPDATE
+  Future<void> atualizar(Receita receita) {
+    return _executar(() => _colecao(_uid).doc(receita.id).update({
+          ...receitaParaMap(receita),
+          'updatedAt': FieldValue.serverTimestamp(),
+        }));
+  }
+
+  /// DELETE (a confirmação é feita na tela, antes de chamar este método)
+  Future<void> remover(String id) {
+    return _executar(() => _colecao(_uid).doc(id).delete());
+  }
+
+  /// Grava uma cópia das receitas de exemplo na conta logada.
+  Future<void> importarExemplos() {
+    return _executar(() {
+      final colecao = _colecao(_uid);
+      final lote = FirebaseFirestore.instance.batch();
+      for (final r in receitasExemplo) {
+        lote.set(colecao.doc(), {
+          ...receitaParaMap(r),
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
+      return lote.commit();
+    });
+  }
+
+  /// Importa as receitas da TheMealDB (já traduzidas) para a conta logada.
+  /// Cada receita usa um id fixo (ex.: mealdb-53120), então importar de novo
+  /// NÃO cria duplicadas: as que já existem são puladas.
+  /// Devolve quantas receitas novas foram gravadas.
+  Future<int> importarReceitasProntas() async {
+    final jaExistem = _receitas.map((r) => r.id).toSet();
+    final novas = [
+      ...receitasTheMealDB,
+      ...receitasTheMealDB2,
+      ...receitasTheMealDB3,
+    ].where((r) => !jaExistem.contains(r.id)).toList();
+
+    if (novas.isEmpty) return 0;
+
+    await _executar(() {
+      final colecao = _colecao(_uid);
+      final lote = FirebaseFirestore.instance.batch();
+      for (final r in novas) {
+        lote.set(colecao.doc(r.id), {
+          ...receitaParaMap(r),
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
+      return lote.commit();
+    });
+    return novas.length;
+  }
+
+  /// Sem internet o Firestore guarda a escrita e só confirma quando a conexão
+  /// volta. O timeout evita a tela ficar carregando para sempre.
+  Future<void> _executar(Future<dynamic> Function() acao) async {
+    await acao().timeout(const Duration(seconds: 10));
+  }
+
+  /// Traduz erros do Firestore em mensagens compreensíveis.
+  static String mensagemDeErro(Object e) {
+    if (e is TimeoutException) {
+      return 'Sem conexão. A alteração será enviada quando a internet voltar.';
+    }
+    if (e is FirebaseException) {
+      switch (e.code) {
+        case 'permission-denied':
+          return 'Você não tem permissão para acessar esses dados.';
+        case 'unavailable':
+        case 'deadline-exceeded':
+          return 'Sem conexão com o servidor. Tente novamente.';
+        case 'not-found':
+          return 'Receita não encontrada. Ela pode ter sido excluída.';
+        case 'unauthenticated':
+          return 'Sessão expirada. Entre novamente.';
+      }
+      return 'Erro no Firestore (${e.code}).';
+    }
+    if (e is StateError) return e.message;
+    return 'Algo deu errado. Tente novamente.';
   }
 }
 
